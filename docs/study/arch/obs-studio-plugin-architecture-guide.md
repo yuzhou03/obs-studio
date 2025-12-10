@@ -486,109 +486,60 @@ graph TB
 
 #### 2.1.3 插件分类体系
 
+**注意**：OBS Studio 并没有 `enum obs_plugin_type` 枚举类型。插件类型是通过不同的信息结构体（obs_source_info、obs_output_info等）来区分的，而不是通过枚举值。
+
 ```c
-// 插件类型定义
-enum obs_plugin_type {
-    OBS_PLUGIN_TYPE_SOURCE,    // 源插件 - 提供输入
-    OBS_PLUGIN_TYPE_FILTER,    // 过滤器插件 - 处理数据
-    OBS_PLUGIN_TYPE_TRANSITION,// 过渡插件 - 场景切换
-    OBS_PLUGIN_TYPE_OUTPUT,    // 输出插件 - 输出数据
-    OBS_PLUGIN_TYPE_ENCODER,   // 编码器插件 - 数据编码
-    OBS_PLUGIN_TYPE_SERVICE,   // 服务插件 - 网络服务
-    OBS_PLUGIN_TYPE_UI         // UI插件 - 用户界面
-};
+// 实际的OBS Studio插件结构体定义
+// 这些结构体定义了不同类型的插件接口
+struct obs_source_info;    // 源插件和过滤器、过渡插件
+struct obs_output_info;    // 输出插件
+struct obs_encoder_info;   // 编码器插件
+struct obs_service_info;   // 服务插件
 ```
 
-#### 2.1.4 插件类型层次结构图
+#### 2.1.4 插件架构结构图
+
+**注意**：OBS Studio 使用纯C语言架构，不存在C++类继承结构。所有插件通过结构体定义和函数注册实现。
 
 ```mermaid
-classDiagram
-    class PluginBase {
-        +id: string
-        +name: string
-        +version: string
-        +description: string
-        +load(): bool
-        +unload(): void
-    }
+graph TD
+    A[插件模块 Module] --> B[源插件 Sources]
+    A --> C[编码器插件 Encoders]
+    A --> D[输出插件 Outputs]
+    A --> E[服务插件 Services]
+    A --> F[过渡插件 Transitions]
     
-    class SourcePlugin {
-        +type: enum
-        +create(): void*
-        +destroy(): void
-        +update(): void
-        +video_tick(): void
-        +video_render(): void
-        +audio_render(): void
-    }
+    B --> B1[obs_source_info<br/>结构体定义]
+    C --> C1[obs_encoder_info<br/>结构体定义]
+    D --> D1[obs_output_info<br/>结构体定义]
+    E --> E1[obs_service_info<br/>结构体定义]
+    F --> F1[obs_source_info<br/>结构体定义]
     
-    class FilterPlugin {
-        +filter_audio(): bool
-        +filter_video(): bool
-        +get_properties(): obs_properties_t
-    }
+    B1 --> G[obs_register_source<br/>函数注册]
+    C1 --> H[obs_register_encoder<br/>函数注册]
+    D1 --> I[obs_register_output<br/>函数注册]
+    E1 --> J[obs_register_service<br/>函数注册]
+    F1 --> G
     
-    class OutputPlugin {
-        +start(): bool
-        +stop(): void
-        +pause(): void
-        +restart(): void
-        +raw_video(): void
-        +raw_audio(): void
-        +encoded_packet(): void
-    }
+    K[OBS_DECLARE_MODULE<br/>模块声明宏] --> L[obs_module_load<br/>模块加载函数]
+    L --> M[注册函数调用]
+    M --> G
+    M --> H
+    M --> I
+    M --> J
     
-    class EncoderPlugin {
-        +encode(): bool
-        +get_headers(): void
-        +get_extra_data(): void
-        +get_video_info(): void
-        +get_audio_info(): void
-    }
+    N[struct obs_source_info] --> O[回调函数指针<br/>create, destroy, update<br/>video_render, audio_render等]
+    N --> P[插件元数据<br/>id, name, type<br/>output_flags等]
     
-    class ServicePlugin {
-        +get_url(): string
-        +get_key(): string
-        +get_connect_data(): bool
-    }
-    
-    class TransitionPlugin {
-        +transition_begin(): void
-        +transition_end(): void
-        +get_time(): float
-    }
-    
-    PluginBase <|-- SourcePlugin
-    PluginBase <|-- FilterPlugin
-    PluginBase <|-- OutputPlugin
-    PluginBase <|-- EncoderPlugin
-    PluginBase <|-- ServicePlugin
-    PluginBase <|-- TransitionPlugin
-    
-    class WinCapturePlugin {
-        +capture_method: int
-        +window_class: string
-        +capture_cursor: bool
-        +compatibility: bool
-    }
-    
-    class RTMPOutputPlugin {
-        +server_url: string
-        +stream_key: string
-        +bitrate: int
-        +use_auth: bool
-    }
-    
-    class NVENCPlugin {
-        +gpu_device: int
-        +preset: string
-        +bitrate: int
-        +gop_size: int
-    }
-    
-    SourcePlugin <|-- WinCapturePlugin
-    OutputPlugin <|-- RTMPOutputPlugin
-    EncoderPlugin <|-- NVENCPlugin
+    style A fill:#e3f2fd
+    style K fill:#e8f5e8
+    style L fill:#fff3e0
+    style N fill:#f3e5f5
+    style B1 fill:#ffebee
+    style C1 fill:#ffebee
+    style D1 fill:#ffebee
+    style E1 fill:#ffebee
+    style F1 fill:#ffebee
 ```
 
 ---
