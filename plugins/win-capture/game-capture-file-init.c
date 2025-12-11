@@ -14,14 +14,18 @@
 
 static bool has_elevation_internal()
 {
+	// Check if the current user is a member of the Administrators group
+	// This is used to determine if the process is running with elevated privileges
 	SID_IDENTIFIER_AUTHORITY sia = SECURITY_NT_AUTHORITY;
 	PSID sid = NULL;
 	BOOL elevated = false;
 	BOOL success;
 
+	// Allocate and initialize a SID for the Administrators group
 	success = AllocateAndInitializeSid(&sia, 2, SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0,
 					   0, &sid);
 	if (success && sid) {
+		// Check if the current token is a member of the Administrators group
 		CheckTokenMembership(NULL, sid, &elevated);
 		FreeSid(sid);
 	}
@@ -31,6 +35,8 @@ static bool has_elevation_internal()
 
 static bool has_elevation()
 {
+	// Cache the elevation status to avoid repeated system calls
+	// This function checks if the current process is running with administrator privileges
 	static bool elevated = false;
 	static bool initialized = false;
 	if (!initialized) {
@@ -41,46 +47,56 @@ static bool has_elevation()
 	return elevated;
 }
 
+// Add AppContainer and Built-in Users permissions to directory
+// This function sets ACL permissions for Windows AppContainer apps and built-in users
+// to allow proper access to OBS hook files and directories
 static bool add_aap_perms(const wchar_t *dir)
 {
 	PSECURITY_DESCRIPTOR sd = NULL;
-	SID *aap_sid = NULL;
-	SID *bu_sid = NULL;
-	PACL new_dacl1 = NULL;
-	PACL new_dacl2 = NULL;
+	SID *aap_sid = NULL;     // ALL_APP_PACKAGES SID for Windows AppContainer
+	SID *bu_sid = NULL;      // BUILTIN_USERS SID for standard user access
+	PACL new_dacl1 = NULL;   // First ACL with ALL_APP_PACKAGES permissions
+	PACL new_dacl2 = NULL;   // Final ACL with both ALL_APP_PACKAGES and BUILTIN_USERS permissions
 	bool success = false;
 
 	PACL dacl;
+	// Get current directory's Discretionary Access Control List (DACL)
 	if (GetNamedSecurityInfoW(dir, SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, NULL, NULL, &dacl, NULL, &sd) !=
 	    ERROR_SUCCESS) {
 		goto fail;
 	}
 
 	EXPLICIT_ACCESSW ea = {0};
-	ea.grfAccessPermissions = GENERIC_READ | GENERIC_EXECUTE;
-	ea.grfAccessMode = GRANT_ACCESS;
-	ea.grfInheritance = SUB_CONTAINERS_AND_OBJECTS_INHERIT;
-	ea.Trustee.TrusteeForm = TRUSTEE_IS_SID;
+	ea.grfAccessPermissions = GENERIC_READ | GENERIC_EXECUTE;  // Allow read and execute access
+	ea.grfAccessMode = GRANT_ACCESS;                           // Grant these permissions
+	ea.grfInheritance = SUB_CONTAINERS_AND_OBJECTS_INHERIT;   // Inherit to subdirectories and objects
+	ea.Trustee.TrusteeForm = TRUSTEE_IS_SID;                   // Using SID for trustee identification
 
-	/* ALL_APP_PACKAGES */
+	/* ALL_APP_PACKAGES - Windows AppContainer security identifier */
+	// Convert string SID to binary format for ALL_APP_PACKAGES (Windows AppContainer)
 	ConvertStringSidToSidW(L"S-1-15-2-1", &aap_sid);
 	ea.Trustee.ptstrName = (wchar_t *)aap_sid;
 
+	// Add ALL_APP_PACKAGES permissions to existing DACL
 	if (SetEntriesInAclW(1, &ea, dacl, &new_dacl1) != ERROR_SUCCESS) {
 		goto fail;
 	}
 
+	// Update permissions for BUILTIN_USERS - add write access
 	ea.grfAccessPermissions = GENERIC_READ | GENERIC_WRITE | GENERIC_EXECUTE;
 
-	/* BUILTIN_USERS */
+	/* BUILTIN_USERS - Standard Windows users group */
+	// Convert string SID to binary format for BUILTIN_USERS (standard user group)
 	ConvertStringSidToSidW(L"S-1-5-32-545", &bu_sid);
 	ea.Trustee.ptstrName = (wchar_t *)bu_sid;
 
+	// Add BUILTIN_USERS permissions to the ACL that already has ALL_APP_PACKAGES
 	DWORD s = SetEntriesInAclW(1, &ea, new_dacl1, &new_dacl2);
 	if (s != ERROR_SUCCESS) {
 		goto fail;
 	}
 
+	// Apply the final ACL with both permission sets to the directory
 	if (SetNamedSecurityInfoW((wchar_t *)dir, SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, NULL, NULL, new_dacl2,
 				  NULL) != ERROR_SUCCESS) {
 		goto fail;
@@ -88,6 +104,7 @@ static bool add_aap_perms(const wchar_t *dir)
 
 	success = true;
 fail:
+	// Clean up allocated security descriptor and ACL memory
 	if (sd)
 		LocalFree(sd);
 	if (new_dacl1)
