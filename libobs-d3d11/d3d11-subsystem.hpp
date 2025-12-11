@@ -358,7 +358,8 @@ enum class gs_type {
 	gs_timer_range,
 	gs_texture_3d,
 };
-
+// gs: Graphics Subsystem的缩写，OBS图形子系统的核心组件前缀
+// gs_obj 是图形对象的基类，包含设备指针、对象类型等信息
 struct gs_obj {
 	gs_device_t *device;
 	gs_type obj_type;
@@ -1039,3 +1040,4 @@ struct gs_device {
 };
 
 extern "C" EXPORT int device_texture_acquire_sync(gs_texture_t *tex, uint64_t key, uint32_t ms);
+
