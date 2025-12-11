@@ -5,6 +5,7 @@
 
 #include <obs-module.h>
 
+// dc 代表 Desktop Capture（桌面捕获）
 struct dc_capture {
 	gs_texture_t *texture;
 	gs_texture_t *extra_texture;
